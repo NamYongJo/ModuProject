@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css">
+<script src="../static/js/scripts.js"></script>
+
+
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.4/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script th:inline="javascript" th:if="${session.member}">
+    const USER_SEQ = [[${session.member.seq}]];
+    const USER_NAME = [[${session.member.memberName}]];
+    const USER_ROLE = [[${session.member.memberRole}]];
+
+    var socket = null;
+    $(document).ready(function(){
+        connectWs();
+        noticeList();
+    })
+
+    function connectWs(){
+        console.log("연결");
+        var ws = new SockJS('/alarm');
+        socket = ws;
+        ws.onopen = function (){
+            console.log("open")
+        };
+
+        ws.onmessage = function (event){
+            console.log("onmessage 실행")
+            console.log("onmessage"+event.data);
+            let htmlAlarm = '';
+            $('#real-time-notice-2').html(event.data);
+            $('#real-time-notice').css('display', 'block');
+
+            setTimeout(function(){
+                $('#real-time-notice').css('display','none');
+
+            }, 5000);
+        };
+        ws.onclose = function() {
+            console.log("onclose 실행")
+            console.log('close');
+        };
+    }
+    function read(tmp){
+        $.ajax({
+            type: 'post',
+            url:'../noticeRead',
+            data: JSON.stringify({
+                noticeSeq : tmp,
+                noticeRead : "Y"
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log("통신 성공"+data);
+                noticeList();
+            },
+            error:function (){
+                alert("통신 실패");
+            }
+        })
+    }
+
+    //알림목록
+    function noticeList(){
+        $.ajax({
+            type: 'get',
+            url:'../noticeList',
+            data:{'writer':USER_NAME},
+            contentType: 'application/json',
+            success: function (data){
+                console.log("댓글리스트 성공")
+                var alarmList = '';
+                var inquiryList = '';
+                var alarmCheck = '';
+                $.each(data, function (ket,value){
+                    if(value.writeType == 'comment'){
+                        if(value.noticeRead == "N" && value.delYn == "N"){
+                            alarmCheck += '<sapn id="check-pie">'+'.'+'</span>'
+                            alarmList += '<div class=notice-div id="notice-seq'+value.noticeSeq+'" onclick="location.href=`/board/PostDetail?boardSeq=`+'+value.typeSeq+'; read('+value.noticeSeq+')">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 게시물'+'('+value.category+')'+value.title+'에 댓글을 달았습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '</div>'
+                        }else if(value.noticeRead =="Y" && value.delYn == "N"){
+                            alarmList += '<div class=notice-div id="notice-seq'+value.noticeSeq+'" style="background-color: #e0dada" onclick="location.href=`/board/PostDetail?boardSeq=`+'+value.typeSeq+'; read('+value.noticeSeq+')">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 게시물'+'('+value.category+')'+value.title+'에 댓글을 달았습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '<span id="read-check">'+'읽음'+'</span>'
+                            alarmList += '</div>'
+                        }
+
+                    }
+                    else if(value.writeType == 'review'){
+                        if(value.noticeRead == "N" && value.delYn == "N"){
+                            alarmCheck = '<sapn id="check-pie">'+'.'+'</span>'
+                            alarmList += '<div class=notice-div onclick="location.href=`/commission/detail?pcSeq=`+'+value.typeSeq+'; read('+value.noticeSeq+')">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에 리뷰를 등록했습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '</div>'
+                        }else if(value.noticeRead =="Y" && value.delYn == "N"){
+                            alarmList += '<div class=notice-div style="background-color: #e0dada" onclick="location.href=`/commission/detail?pcSeq=`+'+value.typeSeq+'">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에 리뷰를 등록했습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '<span id="read-check">'+'읽음'+'</span>'
+                            alarmList += '</div>'
+                        }
+
+                    }
+                    else if(value.writeType == 'commission'){
+                        if(value.noticeRead == "N" && value.delYn == "N"){
+                            alarmCheck = '<sapn id="check-pie">'+'.'+'</span>'
+                            inquiryList += '<div class=notice-div onclick="read('+value.noticeSeq+')">'
+                            inquiryList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에서 채팅요청을 보냈습니다.'+'</span>'
+                            inquiryList += '<br>'
+                            inquiryList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            inquiryList += '<div id="accept" onclick="YN('+value.typeSeq+')">'+'수락'+'</div>'
+                            inquiryList += '</div>'
+                        }else if(value.noticeRead =="Y" && value.delYn == "N"){
+                            inquiryList += '<div class=notice-div style="background-color: #e0dada" onclick="location.href=`/commission/detail?pcSeq=`+'+value.typeSeq+'">'
+                            inquiryList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에서 채팅요청을 보냈습니다.'+'</span>'
+                            inquiryList += '<br>'
+                            inquiryList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            inquiryList += '<span id="read-check">'+'읽음'+'</span>'
+                            inquiryList += '</div>'
+                        }
+                    }
+                })
+                $('.notice-data-section').html(alarmList);
+                $('.inquiry-data-section').html(inquiryList);
+                $('.notice-check').html(alarmCheck);
+            },
+            errors:function (){
+                console.log("실패..")
+            }
+        })
+    }
+    //채팅 방 DB저장
+    function YN(typeSeq){
+        if(confirm("수락하시겠습니까?")){
+            alert("DB 등록")
+            $.ajax({
+                type: 'post',
+                url:'/room',
+                data:JSON.stringify({
+                    roomName : USER_NAME+'교수님의 방',
+                    pcSeq : typeSeq,
+                }),
+                contentType: 'application/json',
+                success:function (data){
+                    console.log("통신 성공"+data);
+                },
+                error:function (){
+                    alert("통신 실패");
+                }
+            })
+        }else{
+            return false;
+        }
+    }
+
+
+    //특정 영역이 아닐시 영역 닫기
+    $('html').click(function (e){
+        if(!$(e.target).is('#notice-list') && !$(e.target).is('#notice-list-header') && !$(e.target).hasClass('notice-data-section') && !$(e.target).is('#header-notice')
+            && !$(e.target).is('#header-chat') && !$(e.target).hasClass('notice-update-delete')
+            && !$(e.target).is('#notice-all-read') && !$(e.target).is('#notice-read-delete') && !$(e.target).is('#notice-all-delete') ){
+            document.getElementById("notice-list-section").style.display='none';
+        }
+    })
+    $('html').click(function (e){
+        if($(e.target).is('#notice-list') || $(e.target).is('#alarm-img')){
+            document.getElementById("notice-list-section").style.display='block';
+        }
+    })
+
+    //db에서 가져온 시간 변환
+    function addTime(date){
+        date = new Date(date);
+        year = date.getFullYear();
+        //자바스크립트는 0부터 11까지만 된다고 함 고로 +1
+        month = date.getMonth()+1;
+        day = date.getDate();
+        hour = date.getHours();
+        minute = date.getMinutes();
+        strDate = year+"-"+month+"-"+day+" "+hour+":"+minute;
+        return strDate;
+    }
+</script>
+<!------ Include the above in your HEAD tag ---------->
+
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>MODU - 5000만 국민의 선택</title>
+    <!--Made with love by Mutiullah Samim -->
+
+    <!--Bootsrap 4 CDN-->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+
+    <!--Fontawesome CDN-->
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+
+    <!--Custom styles-->
+    <link rel="stylesheet" type="text/css" href="../static/css/Main2.css">
+</head>
+<header class="masthead">
+    <!-- Navigation-->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" id="mainNav">
+        <div class="container">
+            <a class="navbar-brand" href="../MainForm"><img src="../static/assets/MODU.PNG" alt="..." /></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+                Menu
+                <i class="fas fa-bars ms-1"></i>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarResponsive">
+                <ul class="navbar-nav text-uppercase ms-auto py-4 py-lg-0">
+                    <th:block th:unless="${session.member}">
+                        <script>
+                            var result = confirm("로그인이 필요한 서비스입니다.");
+
+                            if(result)
+                            {
+                                window.location.href="../LoginForm";
+
+                            }
+                            else
+                            {
+                                window.location.href="../MainForm";
+                            }
+                        </script>
+                    </th:block>
+                    <th:block th:if="${session.member}">
+                        <li class="nav-item"><a class="nav-link" href="#services">카테고리</a></li>
+                        <li class="nav-item"><a class="nav-link" href="./Post">커뮤니티</a></li>
+                        <li th:if="${session.member.memberRole} == 'Professor'" class="nav-item"><a class="nav-link" href="../commission/Form">제안</a></li>
+                        <li th:if="${session.member.memberRole} == 'Student'" class="nav-item"><a class="nav-link" href="../commission/Find">교수찾기</a></li>
+                        <li class="nav-item"><a class="nav-link" id="notice-list"><img id="alarm-img" src="../static/img/notification.png"/></a>
+                            <span class="notice-check"></span>
+                        </li>
+                        <li class="nav-item"><a class="nav-link" href="../MyPage"><td th:text="${session.member.id}"></td>님</a></li>
+                        <li class="nav-item"><a class="nav-link" href="../Logout">로그아웃</a></li>
+                    </th:block>
+                </ul>
+            </div>
+
+        </div>
+        <div id="notice-list-section" style="display: none">
+            <div id="notice-list-header">
+                <div id="header-notice">알림</div>
+                <div id="header-chat">채팅</div>
+                <hr id="header-hr" color="#cccaca" width="100%">
+            </div>
+
+            <div class="notice-data-section">
+
+            </div>
+            <div class="inquiry-data-section" style="display: none">
+
+            </div>
+            <div class="notice-update-delete">
+                <span id="notice-all-read">모두 읽기</span>
+                <span id="notice-read-delete">읽은 알림 삭제</span>
+                <span id="notice-all-delete">모두 삭제</span>
+            </div>
+
+        </div>
+        <script>
+
+            $('#header-notice').click(function (){
+                $('#header-notice').css("border-bottom", "solid 2px #7875C9")
+                $('#header-notice').css("color","#7875C9")
+                $('.notice-data-section').css("display","block")
+                $('#header-chat').css("border-bottom", "solid 0px")
+                $('#header-chat').css("color","black")
+                $('.inquiry-data-section').css("display","none")
+            })
+            $('#header-chat').click(function (){
+                $('#header-chat').css("border-bottom", "solid 2px #7875C9")
+                $('#header-chat').css("color","#7875C9")
+                $('.inquiry-data-section').css("display","block")
+                $('#header-notice').css("border-bottom", "solid 0px")
+                $('#header-notice').css("color","black")
+                $('.notice-data-section').css("display","none")
+            })
+
+            //알림 모두 읽음
+            $('#notice-all-read').click(function (){
+                console.log('알림 모두 읽음');
+                $.ajax({
+                    type: 'post',
+                    url: 'noticeAllRead',
+                    data:JSON.stringify({
+                        writer:USER_NAME,
+                        noticeRead : "Y",
+                    }),
+                    contentType: 'application/json',
+                    success:function (data){
+                        console.log('통신성공');
+                        noticeList();
+                    },
+                    error:function(){
+                        alert('통신실패')
+                    }
+                })
+            })
+
+            //읽은 알림 삭제
+            $('#notice-read-delete').click(function (){
+                console.log('읽은 알림 삭제');
+                if(confirm("정말 삭제하시겠습니까?")){
+                    $.ajax({
+                        type:'get',
+                        url:'noticeReadDelete',
+                        data:{writer : USER_NAME},
+                        contentType: 'application/json',
+                        success:function(data){
+                            console.log('통신성공');
+                            alert("알림이 삭제되었습니다.");
+                            noticeList();
+                        },
+                        error:function(){
+                            alert('통신실패')
+                        }
+                    })
+                }else{
+                    return false;
+                }
+            })
+
+            //알림 모두 삭제
+            $('#notice-all-delete').click(function (){
+                console.log('알림 모두 삭제');
+                if(confirm("정말 삭제하시겠습니까?")){
+                    $.ajax({
+                        type:'get',
+                        url:'noticeDelete',
+                        data:{writer : USER_NAME},
+                        contentType: 'application/json',
+                        success:function(data){
+                            console.log('통신성공');
+                            alert("알림이 삭제되었습니다.");
+                            noticeList();
+                        },
+                        error:function(){
+                            alert('통신실패')
+                        }
+                    })
+                }else{
+                    return false;
+                }
+            })
+
+        </script>
+
+    </nav>
+</header>
+<body>
+<tbody>
+<div class="category_card">
+    <div class="list_detail">
+        <div class="detail">
+            <strong id="detail_font1" th:utext="${list.title}"></strong>
+        </div>
+        <div id="location1"></div>
+        <br>
+        <div id="location2"></div>
+        <div id="detail-btn">
+            <div id="detail-page1"><h5><b><a>상세 설명</a></b></h5></div>
+            <div id="detail-page2"><h5><b>리뷰</b></h5></div>
+        </div>
+        <br>
+        <hr width="100%" color=#b4adad>
+
+        <div id="detail-content" style="display: block">
+            <strong id="detail_font2" th:utext="${list.content}"></strong>
+        </div>
+        <div id="review-page" style="display: none">
+            <div id="star-section" style="display: none">
+                <span class="star">
+              ★★★★★
+              <span>★★★★★</span>
+              <input id="star-id" type="range" oninput="drawStar(this)" value="1" step="0.5" min="0" max="5">
+            </span>
+            </div>
+            <button th:unless="${session.member.memberName} == ${list.writer}" id="review-save-btn" style="display: block">리뷰쓰기</button>
+            <div id="review-save-section" style="display:none">
+                <textarea class="review-save-write" id="review-content" onkeyup="resize(this)" placeholder="후기를 남겨보세요!" style="overflow: hidden" name="content"></textarea>
+                <input type="button" id="review-save" onclick="reviewNotice()" value="등록" style="color: white">
+            </div>
+            <div class="review-List">
+
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    const drawStar = (target) => {
+        document.querySelector(`.star span`).style.width = `${target.value * 20}%`;
+    }
+    function resize(event) {
+        event.style.height = "1px";
+        event.style.height = (12+event.scrollHeight)+"px";
+    }
+    var offset = $('#location1').offset();
+    $('#detail-page1').click(function (){
+        $('#detail-page1').css("border-bottom", "solid 2px black");
+        $('#detail-page2').css("border-bottom", "solid 0px");
+        $('#detail-content').css("display","block");
+        $('#review-page').css("display","none");
+        $('html').animate({scrollTop:offset.top},400);
+    })
+    $('#detail-page2').click(function (){
+        $('#detail-page2').css("border-bottom", "solid 2px black");
+        $('#detail-page1').css("border-bottom", "solid 0px");
+        $('#detail-content').css("display","none");
+        $('#review-page').css("display","block");
+        $('.star-section').css("display","block");
+        $('html').animate({scrollTop:offset.top},400);
+    })
+
+    $('#review-save-btn').click(function (){
+        $('#review-save-btn').css("display","none");
+        $('#review-save-section').css("display","block");
+        $('#review-save').css("display","block");
+        $('#star-section').css("display","block");
+    })
+</script>
+<div id="sideNav">
+    <th:block th:if="${session.member.memberRole.toString().equals('Professor') and session.member.memberName.equals(list.writer)}">
+        <div class="list_chat">
+            <input type="button" class="setBtn" onclick="location.href='./delete/'+pcSeq" value="삭제">
+            <input type="button" class="setBtn" onclick="location.href='./updateForm/'+pcSeq" value="수정">
+        </div>
+    </th:block>
+    <th:block th:if="${session.member.memberRole.toString().equals('Student')}">
+        <div class="list_chat">
+            <input type="button" class="btn1" id="notice-btn" onclick="commissionNotice()" value="문의 보내기">
+        </div>
+    </th:block>
+</div>
+</tbody>
+<!--실시간 알림-->
+<div id="real-time-notice" style="display: none">
+    <div id="real-time-notice-2"></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.4/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script>
+    const seq = '[[${session.member.seq}]]';
+    const writer = '[[${session.member.memberName}]]';
+    const commissionWriter = '[[${list.writer}]]'
+    const pcSeq = [[${list.pcSeq}]];
+    const pcTitle = '[[${list.title}]]';
+    const pcCategory = '[[${list.category}]]';
+
+    //채팅 문의 요청
+    function commissionNotice(insertData){
+        console.log("commission",socket)
+        $.ajax({
+            url:'notice',
+            type: 'post',
+            data:insertData,
+            processData: false, contentType: false,
+            enctype : 'multipart/form-data',
+            success: function (data){
+                if(writer != commissionWriter){
+                    if(socket){
+                        let socketMsg = "commission"+","+writer+","+commissionWriter+","+pcSeq+","+pcTitle+","+pcCategory;
+                        console.log(socketMsg);
+                        socket.send(socketMsg);
+                    }
+                }
+            },
+            errors:function(){
+                console.log("실패");
+            }
+        })
+    }
+    //리뷰 등록 알림
+    function reviewNotice(insertData){
+        console.log("review",socket)
+        $.ajax({
+            url:'review',
+            type: 'post',
+            data:insertData,
+            processData: false, contentType: false,
+            enctype : 'multipart/form-data',
+            success: function (data){
+                if(writer != commissionWriter){
+                    if(socket){
+                        let socketMsg = "review"+","+writer+","+commissionWriter+","+pcSeq+","+pcTitle+","+pcCategory;
+                        console.log(socketMsg);
+                        socket.send(socketMsg);
+                    }
+                }
+            },
+            errors:function(){
+                console.log("실패");
+            }
+        })
+    }
+    //알람 DB 저장
+    $('#notice-btn').click(function (){
+        console.log('문의알람 DB 저장');
+        $.ajax({
+            type:'post',
+            url:'../noticeSave',
+            data: JSON.stringify({
+                "memberSeq":seq,
+                "typeSeq" : pcSeq,
+                "writeType":'commission',
+                "userWriter" : writer,
+                "writer": commissionWriter,
+                "title": pcTitle,
+                "category": pcCategory,
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log('통신성공' + data);
+                alert("알람 저장 완료!");
+
+            },
+            error:function (){
+                alert("통신실패"+data);
+            }
+        });
+    });
+    $('#review-save').click(function (){
+        console.log('리뷰알람 DB 저장');
+        $.ajax({
+            type:'post',
+            url:'../noticeSave',
+            data: JSON.stringify({
+                "memberSeq":seq,
+                "typeSeq" : pcSeq,
+                "writeType":'review',
+                "userWriter" : writer,
+                "writer": commissionWriter,
+                "title": pcTitle,
+                "category": pcCategory,
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log('통신성공' + data);
+                alert("알람 저장 완료!");
+
+            },
+            error:function (){
+                alert("통신실패"+data);
+            }
+        });
+    });
+
+    //후기 저장
+    $('#review-save').click(function (){
+        $('#review-save-btn').css("display","block");
+        $('#review-save-section').css("display","none");
+        $('#review-save').css("display","none");
+        $('#star-section').css("display","none");
+        const content = $('#review-content').val();
+        const starScore = $('#star-id').val();
+        console.log('후기 등록 버튼 클릭');
+        document.querySelector(`.star span`).style.width = `${0 * 20}%`;
+        $.ajax({
+            type:'post',
+            url:'reviewSave',
+            data: JSON.stringify({
+                "writer" : writer,
+                "content" : content,
+                "starScore":starScore,
+                "pcSeq":pcSeq,
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log('통신성공' + data);
+                alert("리뷰가 등록 되었습니다.");
+                reviewList();
+                document.getElementById('review-content').value=" ";
+            },
+            error:function (){
+                alert("통신실패"+data);
+            }
+        });
+    });
+    $(document).ready(function(){
+        reviewList();
+    });
+    //리뷰 수정
+    function reviewUpdate(reviewSeq){
+        const seq = $('#final-update-btn'+reviewSeq).closest('#review-id'+reviewSeq).attr('data-num');
+        show(reviewSeq);
+        console.log('댓글 수정 버튼 클릭')
+        const content = $('#review-update'+reviewSeq).val();
+        const starScore = $('#star-id').val();
+        alert(starScore)
+        if(content.length==0 || content==" "){
+            alert("수정할 문자를 입력해주세요!")
+            return false;
+        }else{
+            $.ajax({
+                type:'post',
+                url:'reviewUpdate',
+                data: JSON.stringify({
+                    "reviewSeq": seq,
+                    "updateSeq":seq,
+                    "writer" : writer,
+                    "content" : content,
+                    "starScore":starScore,
+                    "pcSeq":pcSeq
+                }),
+                contentType: 'application/json',
+                success:function (data){
+                    console.log('통신성공' + data);
+                    alert("댓글이 수정 되었습니다.");
+                    reviewList();
+                    document.getElementById('review-update'+reviewSeq).value=" ";
+                },
+                error:function (){
+                    alert("통신실패"+data);
+                }
+            });
+        }
+
+    }
+
+    //리뷰 삭제
+    function reviewDelete(reviewSeq){
+        const tmp = $('#delete-btn-id'+reviewSeq).closest('#review-id'+reviewSeq).attr('data-num');
+        console.log('댓글 삭제버튼');
+        if(confirm("정말 삭제하시겠습니까?")){
+            $.ajax({
+                type:'get',
+                url:'reviewDelete/'+tmp,
+                contentType: 'application/json',
+                success:function (data){
+                    console.log('통신성공');
+                    alert("댓글이 삭제되었습니다.");
+                    reviewList();
+                },
+                error:function (){
+                    alert("통신실패"+data);
+                }
+
+            })
+        }else{
+            return false;
+        }
+    }
+
+    function show(reviewSeq){
+        document.getElementById("update-delete-id"+reviewSeq).style.display ="block";
+        document.getElementById("update-section-id"+reviewSeq).style.display = "block";
+        document.getElementById("update-section-id"+reviewSeq).style.display ="none";
+        document.getElementById("review-List-Content-id"+reviewSeq).style.display="block";
+        /*document.getElementById("star-update-id"+reviewSeq).style.display="none";*/
+    }
+    function hide(reviewSeq){
+        document.getElementById("update-delete-id"+reviewSeq).style.display ="none";
+        document.getElementById("update-section-id"+reviewSeq).style.display = "none";
+        document.getElementById("update-section-id"+reviewSeq).style.display ="block";
+        document.getElementById("review-List-Content-id"+reviewSeq).style.display="none";
+        /*document.getElementById("star-update-id"+reviewSeq).style.display="block";*/
+    }
+    function ss(aa){
+
+    }
+    const updateStar  = (target) => {
+        alert(ss()+'테스트중')
+        document.getElementById('star-span-id'+1).style.width = `${target.value * 20}%`;
+    }
+
+    //후기 목록 불러오기
+    function reviewList(){
+        $.ajax({
+            type: 'get',
+            url : 'reviewList',
+            data: {'pcSeq':pcSeq},
+            contentType: 'application/json',
+            success:function (data){
+                console.log("리뷰 목록 성공")
+                var htmlReview = '';
+                $.each(data, function (key, value){
+                    if(value.delYn == 'N'&& value.updateYn =='N'){
+                        htmlReview += '<div class="review-comment" id="review-id'+value.reviewSeq+'" data-num="'+value.reviewSeq+'">'
+                        if(USER_NAME == value.writer){
+                            htmlReview += '<div class="review-update-delete" id="update-delete-id'+value.reviewSeq+'">'+'<button class="review-update" style="color:#8e8bd5" onclick="hide('+value.reviewSeq+'); ss('+value.reviewSeq+')">수정</button>';
+                            htmlReview += '<button class="review-delete" id="delete-btn-id'+value.reviewSeq+'" onclick="reviewDelete('+value.reviewSeq+')" style="color:#8e8bd5">삭제</button></div>'
+                        }
+                        htmlReview += '<span class="review-star" id="star-rating-id'+value.reviewSeq+'">'+'★★★★★'+'<span style="width:'+value.starScore*20+'%">★★★★★</span>'+'</span>'
+                        if(value.upDate == null){
+                            htmlReview += '<div id="review-writer">'+value.writer+' | <div id="review-addDate" style="color: #bdbaba">'+addTime(value.addDate)+'</div>'+'</div>'
+                        }
+                        else{
+                            htmlReview += '<div id="review-writer">'+value.writer+' | <div id="review-addDate" style="color: #bdbaba">'+addTime(value.upDate)+'</div>'+'</div>'
+                        }
+
+                        /*htmlReview += '<span class="starUpdate" id="star-update-id'+value.reviewSeq+'" style="display: none">★★★★★'+'<span id="star-span-id'+value.reviewSeq+'">★★★★★</span>'
+                        htmlReview += '<input id="starUpdate-id'+value.reviewSeq+'" type="range" oninput="updateStar(this)" value="1" step="0.5" min="0" max="5">'+'</span>'
+                        */
+                        htmlReview += '<div class="review-update-section" id="update-section-id'+value.reviewSeq+'" style="display: none">'
+                        htmlReview += '<textarea class="review-update-section-textarea" id="review-update'+value.reviewSeq+'" onkeyup="resize(this)" placeholder="수정할 문장을 입력해주세요!" style="overflow: hidden" name="content">'+'</textarea>';
+                        htmlReview += '<div id="div-review-update">'
+                        htmlReview += '<input type="button" class="review-update-section-btn" id="final-update-btn'+value.reviewSeq+'" onclick="reviewUpdate('+value.reviewSeq+')" value="수정" style="color: #8e8bd5">'+'</div>';
+                        htmlReview += '</div>'
+                        htmlReview += '<div class="review-List-Content" id="review-List-Content-id'+value.reviewSeq+'" style="display: block">'+value.content+'</div>'
+                        htmlReview += '<hr color="#cccaca" width="100%"></div>'
+                    }
+                })
+                $(".review-List").html(htmlReview);
+            },
+            error:function (){
+                alert("리뷰 목록 실패..");
+            }
+        })
+    }
+    //db에서 가져온 시간 변환
+    function addTime(date){
+        date = new Date(date);
+        year = date.getFullYear();
+        //자바스크립트는 0부터 11까지만 된다고 함 고로 +1
+        month = date.getMonth()+1;
+        day = date.getDate();
+        hour = date.getHours();
+        minute = date.getMinutes();
+        strDate = year+"-"+month+"-"+day+" "+hour+":"+minute;
+        return strDate;
+    }
+</script>
+</body>
+</html>
+
+

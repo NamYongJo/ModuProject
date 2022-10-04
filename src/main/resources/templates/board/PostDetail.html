@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+<link href="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" rel="stylesheet" id="bootstrap-css">
+<script src="//maxcdn.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+<script src="../static/js/scripts.js"></script>
+<!------ Include the above in your HEAD tag ---------->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.4/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script th:inline="javascript" th:if="${session.member}">
+    const USER_SEQ = [[${session.member.seq}]];
+    const USER_NAME = [[${session.member.memberName}]];
+    const USER_ROLE = [[${session.member.memberRole}]];
+
+    var socket = null;
+    $(document).ready(function(){
+        connectWs();
+        noticeList();
+    })
+
+    function connectWs(){
+        console.log("연결");
+        var ws = new SockJS('/alarm');
+        socket = ws;
+        ws.onopen = function (){
+            console.log("open")
+        };
+
+        ws.onmessage = function (event){
+            console.log("onmessage 실행")
+            console.log("onmessage"+event.data);
+            let htmlAlarm = '';
+            $('#real-time-notice-2').html(event.data);
+            $('#real-time-notice').css('display', 'block');
+
+            setTimeout(function(){
+                $('#real-time-notice').css('display','none');
+
+            }, 5000);
+        };
+        ws.onclose = function() {
+            console.log("onclose 실행")
+            console.log('close');
+        };
+    }
+    function read(tmp){
+        $.ajax({
+            type: 'post',
+            url:'../noticeRead',
+            data: JSON.stringify({
+                noticeSeq : tmp,
+                noticeRead : "Y"
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log("통신 성공"+data);
+                noticeList();
+            },
+            error:function (){
+                alert("통신 실패");
+            }
+        })
+    }
+
+    //알림목록
+    function noticeList(){
+        $.ajax({
+            type: 'get',
+            url:'../noticeList',
+            data:{'writer':USER_NAME},
+            contentType: 'application/json',
+            success: function (data){
+                console.log("댓글리스트 성공")
+                var alarmList = '';
+                var inquiryList = '';
+                var alarmCheck = '';
+                $.each(data, function (ket,value){
+                    if(value.writeType == 'comment'){
+                        if(value.noticeRead == "N" && value.delYn == "N"){
+                            alarmCheck += '<sapn id="check-pie">'+'.'+'</span>'
+                            alarmList += '<div class=notice-div id="notice-seq'+value.noticeSeq+'" onclick="location.href=`/board/PostDetail?boardSeq=`+'+value.typeSeq+'; read('+value.noticeSeq+')">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 게시물'+'('+value.category+')'+value.title+'에 댓글을 달았습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '</div>'
+                        }else if(value.noticeRead =="Y" && value.delYn == "N"){
+                            alarmList += '<div class=notice-div id="notice-seq'+value.noticeSeq+'" style="background-color: #e0dada" onclick="location.href=`/board/PostDetail?boardSeq=`+'+value.typeSeq+'; read('+value.noticeSeq+')">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 게시물'+'('+value.category+')'+value.title+'에 댓글을 달았습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '<span id="read-check">'+'읽음'+'</span>'
+                            alarmList += '</div>'
+                        }
+
+                    }
+                    else if(value.writeType == 'review'){
+                        if(value.noticeRead == "N" && value.delYn == "N"){
+                            alarmCheck = '<sapn id="check-pie">'+'.'+'</span>'
+                            alarmList += '<div class=notice-div onclick="location.href=`/commission/detail?pcSeq=`+'+value.typeSeq+'; read('+value.noticeSeq+')">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에 리뷰를 등록했습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '</div>'
+                        }else if(value.noticeRead =="Y" && value.delYn == "N"){
+                            alarmList += '<div class=notice-div style="background-color: #e0dada" onclick="location.href=`/commission/detail?pcSeq=`+'+value.typeSeq+'">'
+                            alarmList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에 리뷰를 등록했습니다!'+'</span>'
+                            alarmList += '<br>'
+                            alarmList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            alarmList += '<span id="read-check">'+'읽음'+'</span>'
+                            alarmList += '</div>'
+                        }
+
+                    }
+                    else if(value.writeType == 'commission'){
+                        if(value.noticeRead == "N" && value.delYn == "N"){
+                            alarmCheck = '<sapn id="check-pie">'+'.'+'</span>'
+                            inquiryList += '<div class=notice-div onclick="read('+value.noticeSeq+')">'
+                            inquiryList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에서 채팅요청을 보냈습니다.'+'</span>'
+                            inquiryList += '<br>'
+                            inquiryList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            inquiryList += '<div id="accept" onclick="YN('+value.typeSeq+')">'+'수락'+'</div>'
+                            inquiryList += '</div>'
+                        }else if(value.noticeRead =="Y" && value.delYn == "N"){
+                            inquiryList += '<div class=notice-div style="background-color: #e0dada" onclick="location.href=`/commission/detail?pcSeq=`+'+value.typeSeq+'">'
+                            inquiryList += '<span id="list-data">'+value.userWriter+'님이'+' 제안서'+'('+value.category+')'+value.title+'에서 채팅요청을 보냈습니다.'+'</span>'
+                            inquiryList += '<br>'
+                            inquiryList += '<span id="list-date">'+addTime(value.addDate)+'</span>'
+                            inquiryList += '<span id="read-check">'+'읽음'+'</span>'
+                            inquiryList += '</div>'
+                        }
+                    }
+                })
+                $('.notice-data-section').html(alarmList);
+                $('.inquiry-data-section').html(inquiryList);
+                $('.notice-check').html(alarmCheck);
+            },
+            errors:function (){
+                console.log("실패..")
+            }
+        })
+    }
+    //채팅 방 DB저장
+    function YN(typeSeq){
+        if(confirm("수락하시겠습니까?")){
+            alert("DB 등록")
+            $.ajax({
+                type: 'post',
+                url:'/room',
+                data:JSON.stringify({
+                    roomName : USER_NAME+'교수님의 방',
+                    pcSeq : typeSeq,
+                }),
+                contentType: 'application/json',
+                success:function (data){
+                    console.log("통신 성공"+data);
+                },
+                error:function (){
+                    alert("통신 실패");
+                }
+            })
+        }else{
+            return false;
+        }
+    }
+
+
+    //특정 영역이 아닐시 영역 닫기
+    $('html').click(function (e){
+        if(!$(e.target).is('#notice-list') && !$(e.target).is('#notice-list-header') && !$(e.target).hasClass('notice-data-section') && !$(e.target).is('#header-notice')
+            && !$(e.target).is('#header-chat') && !$(e.target).hasClass('notice-update-delete')
+            && !$(e.target).is('#notice-all-read') && !$(e.target).is('#notice-read-delete') && !$(e.target).is('#notice-all-delete') ){
+            document.getElementById("notice-list-section").style.display='none';
+        }
+    })
+    $('html').click(function (e){
+        if($(e.target).is('#notice-list') || $(e.target).is('#alarm-img')){
+            document.getElementById("notice-list-section").style.display='block';
+        }
+    })
+
+    //db에서 가져온 시간 변환
+    function addTime(date){
+        date = new Date(date);
+        year = date.getFullYear();
+        //자바스크립트는 0부터 11까지만 된다고 함 고로 +1
+        month = date.getMonth()+1;
+        day = date.getDate();
+        hour = date.getHours();
+        minute = date.getMinutes();
+        strDate = year+"-"+month+"-"+day+" "+hour+":"+minute;
+        return strDate;
+    }
+</script>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>MODU - 5000만 국민의 선택</title>
+    <!--Made with love by Mutiullah Samim -->
+
+    <!--Bootsrap 4 CDN-->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+
+    <!--Fontawesome CDN-->
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.3.1/css/all.css" integrity="sha384-mzrmE5qonljUremFsqc01SB46JvROS7bZs3IO2EmfFsd15uHvIt+Y8vEf7N7fWAU" crossorigin="anonymous">
+
+    <!--Custom styles-->
+    <link rel="stylesheet" type="text/css" href="../static/css/Main2.css">
+</head>
+<header class="masthead">
+    <!-- Navigation-->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top" id="mainNav">
+        <div class="container">
+            <a class="navbar-brand" href="../MainForm"><img src="../static/assets/MODU.PNG" alt="..." /></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
+                Menu
+                <i class="fas fa-bars ms-1"></i>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarResponsive">
+                <ul class="navbar-nav text-uppercase ms-auto py-4 py-lg-0">
+                    <th:block th:unless="${session.member}">
+                        <script>
+                            var result = confirm("로그인이 필요한 서비스입니다.");
+
+                            if(result)
+                            {
+                                window.location.href="../LoginForm";
+
+                            }
+                            else
+                            {
+                                window.location.href="../MainForm";
+                            }
+                        </script>
+                    </th:block>
+                    <th:block th:if="${session.member}">
+                        <li class="nav-item"><a class="nav-link" href="#services">카테고리</a></li>
+                        <li class="nav-item"><a class="nav-link" href="./Post">커뮤니티</a></li>
+                        <li th:if="${session.member.memberRole} == 'Professor'" class="nav-item"><a class="nav-link" href="../commission/Form">제안</a></li>
+                        <li th:if="${session.member.memberRole} == 'Student'" class="nav-item"><a class="nav-link" href="../commission/Find">교수찾기</a></li>
+                        <li class="nav-item"><a class="nav-link" id="notice-list"><img id="alarm-img" src="../static/img/notification.png"/></a>
+                            <span class="notice-check"></span>
+                        </li>
+                        <li class="nav-item"><a class="nav-link" href="../MyPage"><td th:text="${session.member.id}"></td>님</a></li>
+                        <li class="nav-item"><a class="nav-link" href="../Logout">로그아웃</a></li>
+                    </th:block>
+                </ul>
+            </div>
+
+        </div>
+        <div id="notice-list-section" style="display: none">
+            <div id="notice-list-header">
+                <div id="header-notice">알림</div>
+                <div id="header-chat">채팅</div>
+                <hr id="header-hr" color="#cccaca" width="100%">
+            </div>
+
+            <div class="notice-data-section">
+
+            </div>
+            <div class="inquiry-data-section" style="display: none">
+
+            </div>
+            <div class="notice-update-delete">
+                <span id="notice-all-read">모두 읽기</span>
+                <span id="notice-read-delete">읽은 알림 삭제</span>
+                <span id="notice-all-delete">모두 삭제</span>
+            </div>
+
+        </div>
+        <script>
+
+            $('#header-notice').click(function (){
+                $('#header-notice').css("border-bottom", "solid 2px #7875C9")
+                $('#header-notice').css("color","#7875C9")
+                $('.notice-data-section').css("display","block")
+                $('#header-chat').css("border-bottom", "solid 0px")
+                $('#header-chat').css("color","black")
+                $('.inquiry-data-section').css("display","none")
+            })
+            $('#header-chat').click(function (){
+                $('#header-chat').css("border-bottom", "solid 2px #7875C9")
+                $('#header-chat').css("color","#7875C9")
+                $('.inquiry-data-section').css("display","block")
+                $('#header-notice').css("border-bottom", "solid 0px")
+                $('#header-notice').css("color","black")
+                $('.notice-data-section').css("display","none")
+            })
+
+            //알림 모두 읽음
+            $('#notice-all-read').click(function (){
+                console.log('알림 모두 읽음');
+                $.ajax({
+                    type: 'post',
+                    url: 'noticeAllRead',
+                    data:JSON.stringify({
+                        writer:USER_NAME,
+                        noticeRead : "Y",
+                    }),
+                    contentType: 'application/json',
+                    success:function (data){
+                        console.log('통신성공');
+                        noticeList();
+                    },
+                    error:function(){
+                        alert('통신실패')
+                    }
+                })
+            })
+
+
+            //읽은 알림 삭제
+            $('#notice-read-delete').click(function (){
+                console.log('읽은 알림 삭제');
+                if(confirm("정말 삭제하시겠습니까?")){
+                    $.ajax({
+                        type:'get',
+                        url:'noticeReadDelete',
+                        data:{writer : USER_NAME},
+                        contentType: 'application/json',
+                        success:function(data){
+                            console.log('통신성공');
+                            alert("알림이 삭제되었습니다.");
+                            noticeList();
+                        },
+                        error:function(){
+                            alert('통신실패')
+                        }
+                    })
+                }else{
+                    return false;
+                }
+            })
+
+            //알림 모두 삭제
+            $('#notice-all-delete').click(function (){
+                console.log('알림 모두 삭제');
+                if(confirm("정말 삭제하시겠습니까?")){
+                    $.ajax({
+                        type:'get',
+                        url:'noticeDelete',
+                        data:{writer : USER_NAME},
+                        contentType: 'application/json',
+                        success:function(data){
+                            console.log('통신성공');
+                            alert("알림이 삭제되었습니다.");
+                            noticeList();
+                        },
+                        error:function(){
+                            alert('통신실패')
+                        }
+                    })
+                }else{
+                    return false;
+                }
+            })
+
+        </script>
+
+
+    </nav>
+</header>
+<article class="postDetail-section">
+    <div id="postDetail-header">
+        <span th:if="${post.category}=='information'" style="color: #a8a5a5">교수의 꿀팁</span>
+        <span th:if="${post.category}=='qna'" style="color: #a8a5a5">교수님 질문있어요</span>
+        <span th:if="${post.category}=='together'" style="color: #a8a5a5">모두 다 함께</span>
+        <span th:if="${post.category}=='search'" style="color: #a8a5a5">교수 찾기</span>
+        <h1 th:utext="${post.title}" id="postDetail-h1"></h1>
+        <div id="postDetail-profile">
+            <span th:utext="${post.writer}+'님'"></span>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp
+            <span th:utext="${post.addDate}" style="color:#a8a5a5"></span>
+            <span id="board-view" th:utext="'조회'+' '+${post.boardView}" style="color:#a8a5a5"></span>
+            <th:block th:if="${session.member.memberName}==${post.writer}">
+                <button id="post-update-btn" onclick="location.href='./updateForm/'+boardSeq" style="color: #8e8bd5">수정</button>
+                <button id="post-delete-btn" onclick="location.href='./deleteForm/'+boardSeq" style="color: #8e8bd5">삭제</button>
+            </th:block>
+
+
+            <br>
+            <hr color="#cccaca" width="100%">
+        </div>
+    </div>
+    <div id="msgStack"></div>
+    <div id="postDetail-body">
+        <span th:utext="${post.content}" style="font-size: 18px"></span>
+    </div><hr color="#cccaca" width="100%">
+    <div id="postDetail-footer">
+        <div id="textarea-box">
+            <textarea class="postDetail-textarea"  id="comment-textarea" onkeyup="resize(this)" placeholder="댓글을 남겨보세요" style="overflow: hidden" name="content"></textarea>
+            <div id="textarea-save">
+                <input type="button" id="comment-save-btn" onclick="commentInsert()" value="등록" style="color: #8e8bd5">
+            </div>
+        </div>
+        <!--htmlComment += '<article id="update-section">'
+                            htmlComment += '<div id="textarea-box-update">'
+                            htmlComment += '<textarea class="postDetail-textarea" id="comment-update" onkeyup="resize(this)" placeholder="수정할 문장을 입력해주세요" style="overflow: hidden" name="content">'+'</textarea>'
+                            htmlComment += '<div id="textarea-update">'
+                            htmlComment += '<input type="button" class="comment-update" id="final-update-btn'+value.bcSeq+'" onclick="hide()" value="수정" style="color: #8e8bd5">'+'</div>'
+                            htmlComment += '</div>'+'</article>'
+                            -->
+        <div class="postDetail-comment">
+
+        </div>
+    </div>
+
+</article>
+<!--실시간 알림-->
+<div id="real-time-notice" style="display: none">
+    <div id="real-time-notice-2"></div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.5/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+<!-- ajax 작동 -->
+<script>
+    function resize(event) {
+        event.style.height = "1px";
+        event.style.height = (12+event.scrollHeight)+"px";
+    }
+    const seq = '[[${session.member.seq}]]';
+    const role = '[[${session.member.memberRole}]]';
+    const name = '[[${session.member.memberName}]]'
+    const writer = '[[${session.member.memberName}]]';
+    const category = '[[${session.member.category}]]';
+    const boardSeq = '[[${post.boardSeq}]]';
+    const boardWriter = '[[${post.writer}]]';
+    const boardTitle = '[[${post.title}]]'
+    const boardCategory = '[[${post.category}]]'
+
+
+
+    function commentInsert(insertData){
+        console.log("commentSocket",socket)
+        $.ajax({
+            url: 'writeComment',
+            type: 'post',
+            data:insertData,
+            processData: false, contentType: false,
+            enctype : 'multipart/form-data',
+            success : function (data){
+                if(writer != boardWriter){
+                    if(socket){
+                        let socketMsg = "comment"+","+writer+","+boardWriter+","+boardSeq+","+boardTitle+","+boardCategory;
+                        console.log(socketMsg);
+                        socket.send(socketMsg);
+                    }
+                }
+            }
+        })
+    }
+    //알람 DB 저장
+    $('#comment-save-btn').click(function (){
+        console.log('알람 DB 저장');
+        $.ajax({
+            type:'post',
+            url:'../noticeSave',
+            data: JSON.stringify({
+                "memberSeq":seq,
+                "typeSeq" : boardSeq,
+                "writeType":'comment',
+                "userWriter" : writer,
+                "writer": boardWriter,
+                "title":boardTitle,
+                "category":category,
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log('통신성공' + data);
+                alert("알람 저장 완료!");
+
+            },
+            error:function (){
+                alert("통신실패"+data);
+            }
+        });
+    });
+
+
+    //댓글 등록
+    $('#textarea-save').click(function (){
+        console.log('댓글 등록 버튼 클릭');
+        const content = $('#comment-textarea').val();
+        $.ajax({
+            type:'post',
+            url:'commentSave',
+            data: JSON.stringify({
+                "writer" : writer,
+                "content" : content,
+                "category":category,
+                "boardSeq":boardSeq,
+            }),
+            contentType: 'application/json',
+            success:function (data){
+                console.log('통신성공' + data);
+                alert("댓글이 등록 되었습니다.");
+                commentList();
+                document.getElementById('comment-textarea').value=" ";
+            },
+            error:function (){
+                alert("통신실패"+data);
+            }
+        });
+    });
+
+
+    //댓글 수정
+    function commentUpdate(bcSeq){
+        const test = $('#final-update-btn'+bcSeq).closest('#comment-id'+bcSeq).attr('data-num');
+
+        console.log('댓글 수정 버튼 클릭')
+        const content = $('#comment-update'+bcSeq).val();
+        if(content.length==0 || content==" "){
+            alert("수정할 문자를 입력해주세요!")
+            return false;
+        }else{
+            $.ajax({
+                type:'post',
+                url:'commentUpdate',
+                data: JSON.stringify({
+                    "bcSeq": test,
+                    "updateSeq":test,
+                    "writer" : writer,
+                    "content" : content,
+                    "category":category,
+                    "boardSeq":boardSeq
+                }),
+                contentType: 'application/json',
+                success:function (data){
+                    console.log('통신성공' + data);
+                    alert("댓글이 수정 되었습니다.");
+                    commentList();
+                    document.getElementById('comment-update'+bcSeq).value=" ";
+                },
+                error:function (){
+                    alert("통신실패"+data);
+                }
+            });
+        }
+
+    }
+
+
+    //댓글 삭제
+    function commentDelete(bcSeq){
+        const tmp = $('#delete-btn-id'+bcSeq).closest('#comment-id'+bcSeq).attr('data-num');
+        console.log('댓글 삭제버튼');
+        if(confirm("정말 삭제하시겠습니까?")){
+            $.ajax({
+                type:'get',
+                url:'commentDelete/'+tmp,
+                contentType: 'application/json',
+                success:function (data){
+                    console.log('통신성공');
+                    alert("댓글이 삭제되었습니다.");
+                    commentList();
+                },
+                error:function (){
+                    alert("통신실패"+data);
+                }
+
+            })
+        }else{
+            return false;
+        }
+
+
+    }
+
+
+
+    //댓글 목록
+    function commentList(){
+        $.ajax({
+            type: 'get',
+            url : 'commentList',
+            data: {'boardSeq':boardSeq},
+            contentType: 'application/json',
+            success:function (data){
+                var htmlComment = '';
+                $.each(data, function (key, value){
+                    if(value.delYn == 'N'&& value.updateYn =='N'){
+                        htmlComment += '<div class="comment-list" id="comment-id'+value.bcSeq+'" data-num="'+value.bcSeq+'">';
+                        if(USER_NAME == value.writer){
+                            htmlComment += '<div class="comment-update-delete" id="update-delete-id'+value.bcSeq+'">'+'<button class="btn-update" style="color:#8e8bd5" onclick="hide('+value.bcSeq+')">수정</button>';
+                            htmlComment += '<button class="btn-delete" id="delete-btn-id'+value.bcSeq+'" onclick="commentDelete('+value.bcSeq+')" style="color:#8e8bd5">삭제</button></div>'
+                        }
+                        htmlComment += '<div class="comment-writer">'+'<span id="span-writer">'+value.writer+'</div>';
+                        if(role == 'Professor'){
+                            htmlComment += '<div class="comment-category">'+'<span id="span-category" style="color: #bdbaba">'+value.category+"고수님"+'</div>';
+                        }
+                        htmlComment += '<div class="update-section" id="update-section-id'+value.bcSeq+'" style="display: none">'
+                        htmlComment += '<textarea class="update-section-textarea" id="comment-update'+value.bcSeq+'" onkeyup="resize(this)" placeholder="수정할 문장을 입력해주세요" style="overflow: hidden" name="content">'+'</textarea>';
+                        htmlComment += '<div id="div-update">'
+                        htmlComment += '<input type="button" class="update-section-btn" id="final-update-btn'+value.bcSeq+'" onclick="commentUpdate('+value.bcSeq+')" value="수정" style="color: #8e8bd5">'+'</div>';
+                        htmlComment += '</div>'
+                        htmlComment += '<div class="content-section" id="content-section-id'+value.bcSeq+'" style="display: block">'
+                        htmlComment += '<div class="comment-content">'+'<span id="span-content">'+value.content+'</div>';
+                        if(value.upDate == null){
+                            htmlComment += '<div class="comment-addDate">'+'<span id="span-addDate">'+addTime(value.addDate)+'</div></div>';
+                        }else{
+                            htmlComment += '<div class="comment-addDate">'+'<span id="span-addDate">'+addTime(value.upDate)+'</div></div>';
+                        }
+                        htmlComment += '<hr color="#cccaca" width="100%"></div>'
+                    }
+
+                })
+                $(".postDetail-comment").html(htmlComment);
+            },
+            error:function (){
+                alert("댓글 목록 실패..");
+            }
+        })
+    }
+    function show(bcSeq){
+        document.getElementById("update-delete-id"+bcSeq).style.display ="block";
+        document.getElementById("content-section-id"+bcSeq).style.display ="block";
+        document.getElementById("update-section-id"+bcSeq).style.display ="none";
+    }
+    function hide(bcSeq){
+        document.getElementById("update-delete-id"+bcSeq).style.display ="none";
+        document.getElementById("content-section-id"+bcSeq).style.display = "none";
+        document.getElementById("update-section-id"+bcSeq).style.display ="block";
+    }
+
+    //댓글 목록보여주기
+    $(document).ready(function(){
+        commentList();
+    });
+
+
+
+    //db에서 가져온 시간 변환
+    function addTime(date){
+        date = new Date(date);
+        year = date.getFullYear();
+        //자바스크립트는 0부터 11까지만 된다고 함 고로 +1
+        month = date.getMonth()+1;
+        day = date.getDate();
+        hour = date.getHours();
+        minute = date.getMinutes();
+        strDate = year+"-"+month+"-"+day+" "+hour+":"+minute;
+        return strDate;
+    }
+
+
+</script>
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.1.4/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<!--<script src="../static/js/Main.js"></script>-->
+</html>
+
+

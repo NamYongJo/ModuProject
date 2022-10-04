@@ -1,0 +1,7 @@
+.swiper-container {
+    width:600px;
+    height:400px;
+}
+
+.swiper-pagination-bullet { width: 12px; height: 12px; background: transparent; border: 1px solid pink; opacity: 1; }
+.swiper-pagination-bullet-active { width: 40px; transition: width .5s; border-radius: 5px; background: pink; border: 1px solid transparent; }
